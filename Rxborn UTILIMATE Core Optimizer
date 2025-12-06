@@ -1,0 +1,530 @@
+@echo off
+::  Rxborn Core Optimizer  –  Win 7 → 11  (safe, reversible, CMD-only)
+::  v5.0  2025-12-07  –  Optional virus scan
+setlocal EnableExtensions EnableDelayedExpansion
+title Rxborn Core Optimizer  (ADMIN)
+
+fltmc >nul 2>&1 || (
+  mshta vbscript:Execute("CreateObject(""Shell.Application"").ShellExecute ""cmd.exe"",""/c """"%~f0"""" "",, ""runas"",1")(window.close)
+  exit /b
+)
+
+:: =====  MAIN MENU  =====
+:menu
+cls
+echo ======================  Rxborn Core Optimizer  ======================
+echo.
+echo  1  SysMain / Prefetch tweaks
+echo  2  Power-plan & CPU tweaks
+echo  3  Visual & shell effects
+echo  4  Temp & cache cleanup
+echo  5  Startup & services
+echo  6  OneDrive / cloud tweaks
+echo  7  Telemetry & background tasks
+echo  8  Network & SMB tweaks
+echo  9  NTFS & file-system tweaks
+echo  10 Input tweaks (KBM ^& Controller)
+echo.
+echo  V  Virus scan (Defender + MBAM)
+echo  R  REVERT (undo selected)
+echo  0  Exit
+echo.
+choice /c 12345678910vr0 /n /m "Choose: "
+set "ch=%errorlevel%"
+if /i "%ch%"=="0"  exit /b
+if /i "%ch%"=="21" goto virusScan
+if /i "%ch%"=="22" goto revert
+call :cat%ch%
+pause
+goto menu
+
+::::::::::::  OPTIONAL VIRUS SCAN  ::::::::::::::
+:virusScan
+cls
+echo [Rxborn] Starting virus scan ...
+:: 1. Quick Defender scan
+echo  [Scan] Microsoft Defender Quick Scan ...
+mpcmdrun -Scan -ScanType 1 >nul 2>&1
+if %errorlevel% neq 0 (
+  echo  [Scan] Defender found threats – auto-removing ...
+  mpcmdrun -Remove -All >nul 2>&1
+)
+
+:: 2. Malwarebytes free CLI (if present)
+where mbam.exe >nul 2>&1 && (
+  echo  [Scan] Malwarebytes quick scan ...
+  mbam /quick /silent /noreboot
+  if %errorlevel% neq 0 (
+    echo  [Scan] MBAM found threats – check quarantine.
+  )
+) || (
+  echo  [Scan] MBAM CLI not found – skipping.
+)
+
+:: 3. Simple miner check
+wmic process where "name like '%%miner%%' or name like '%%xmrig%%' or name like '%%nicehash%%'" get name 2>nul | findstr /i "miner xmrig nicehash" >nul && (
+  echo  [Scan] KNOWN MINER DETECTED – terminating ...
+  wmic process where "name like '%%miner%%' or name like '%%xmrig%%' or name like '%%nicehash%%'" call terminate >nul 2>&1
+)
+
+echo [Rxborn] Scan complete – returning to menu.
+pause
+goto menu
+
+::::::::::::  CREATE RESTORE POINT (only after user picks first tweak)  ::::::::::::::
+:makeRP
+echo [Rxborn] Creating restore point ...
+wmic.exe /Namespace:\\root\default Path SystemRestore Call CreateRestorePoint "Rxborn-CoreOptimize-%DATE%", 100, 7 >nul 2>&1
+if %errorlevel%==0 (
+  echo [Rxborn] Restore point created – FINISHED
+) else (
+  echo [Rxborn] WARNING: could not create restore point – continuing anyway
+)
+set "rpDone=1"
+goto :eof
+
+::::::::::::  CAT 1 – SysMain  ::::::::::::::
+:cat1
+if not defined rpDone call :makeRP
+cls
+echo ===== 1. SysMain / Prefetch =====
+echo  1  Disable SysMain + Prefetch=Apps
+echo  2  Clear Prefetch folder
+echo  0  Back
+choice /c 120 /n /m "Pick: "
+if %errorlevel%==1 goto :eof
+if %errorlevel%==2 call :t1-1&call :t1-2
+goto :eof
+
+:t1-1
+sc query SysMain | find "RUNNING" >nul && sc stop SysMain
+sc config SysMain start= disabled
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" /v EnablePrefetcher /t REG_DWORD /d 2 /f >nul
+echo [Rxborn] SysMain disabled + Prefetch=Apps – FINISHED
+goto :eof
+
+:t1-2
+del /s /f /q "%SystemRoot%\Prefetch\*.*" >nul 2>&1
+echo [Rxborn] Prefetch cache cleared – FINISHED
+goto :eof
+
+::::::::::::  CAT 2 – Power  ::::::::::::::
+:cat2
+if not defined rpDone call :makeRP
+cls
+echo ===== 2. Power/CPU =====
+echo  1  High-Performance plan
+echo  2  Disable hibernation
+echo  3  USB selective suspend OFF
+echo  0  Back
+choice /c 1230 /n /m "Pick: "
+if %errorlevel%==1 goto :eof
+if %errorlevel%==2 call :t2-1
+if %errorlevel%==3 call :t2-2
+if %errorlevel%==4 call :t2-3
+goto :eof
+
+:t2-1
+powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+echo [Rxborn] High-Performance plan – FINISHED
+goto :eof
+
+:t2-2
+powercfg /hibernate off
+echo [Rxborn] Hibernation disabled – FINISHED
+goto :eof
+
+:t2-3
+powercfg /SETACVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0
+powercfg /SETDCVALUEINDEX SCHEME_CURRENT 2a737441-1930-4402-8d77-b2bebba308a3 48e6b7a6-50f5-4782-a5d4-53bb8f07e226 0
+powercfg /setactive scheme_current
+echo [Rxborn] USB selective suspend OFF – FINISHED
+goto :eof
+
+::::::::::::  CAT 3 – Visual  ::::::::::::::
+:cat3
+if not defined rpDone call :makeRP
+cls
+echo ===== 3. Visual Effects =====
+echo  1  Best performance preset
+echo  2  MenuShowDelay=0
+echo  3  Disable AeroPeek + Thumbnails
+echo  0  Back
+choice /c 1230 /n /m "Pick: "
+if %errorlevel%==1 goto :eof
+if %errorlevel%==2 call :t3-1
+if %errorlevel%==3 call :t3-2
+if %errorlevel%==4 call :t3-3
+goto :eof
+
+:t3-1
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 2 /f >nul
+echo [Rxborn] VisualFXSetting = 2 – FINISHED
+goto :eof
+
+:t3-2
+reg add "HKCU\Control Panel\Desktop" /v MenuShowDelay /t REG_SZ /d 0 /f >nul
+echo [Rxborn] MenuShowDelay = 0 – FINISHED
+goto :eof
+
+:t3-3
+reg add "HKCU\Software\Microsoft\Windows\DWM" /v EnableAeroPeek /t REG_DWORD /d 0 /f >nul
+reg add "HKCU\Software\Microsoft\Windows\DWM" /v AlwaysHibernateThumbnails /t REG_DWORD /d 0 /f >nul
+echo [Rxborn] Aero Peek & thumbnails OFF – FINISHED
+goto :eof
+
+::::::::::::  CAT 4 – Temp  ::::::::::::::
+:cat4
+if not defined rpDone call :makeRP
+cls
+echo ===== 4. Temp & Cache =====
+echo  1  Clean user %TEMP%
+echo  2  Windows Update cache
+echo  3  Empty Recycle-Bin all drives
+echo  0  Back
+choice /c 1230 /n /m "Pick: "
+if %errorlevel%==1 goto :eof
+if %errorlevel%==2 call :t4-1
+if %errorlevel%==3 call :t4-2
+if %errorlevel%==4 call :t4-3
+goto :eof
+
+:t4-1
+del /s /f /q "%TEMP%\*" >nul 2>&1
+for /d %%D in ("%TEMP%\*") do rd /s /q "%%D" 2>nul
+md "%TEMP%" 2>nul
+echo [Rxborn] User temp cleaned – FINISHED
+goto :eof
+
+:t4-2
+net stop wuauserv >nul 2>&1
+del /s /f /q "%windir%\SoftwareDistribution\Download\*.*" >nul 2>&1
+net start wuauserv >nul 2>&1
+echo [Rxborn] Windows Update cache cleared – FINISHED
+goto :eof
+
+:t4-3
+for /f "skip=1" %%D in ('wmic logicaldisk get caption') do rd /s /q "%%D\$Recycle.Bin" 2>nul
+echo [Rxborn] Recycle-Bin emptied – FINISHED
+goto :eof
+
+::::::::::::  CAT 5 – Services  ::::::::::::::
+:cat5
+if not defined rpDone call :makeRP
+cls
+echo ===== 5. Startup & Services =====
+echo  1  List 3rd-party startup
+echo  2  Disable Windows Search
+echo  3  Disable Print Spooler
+echo  0  Back
+choice /c 1230 /n /m "Pick: "
+if %errorlevel%==1 goto :eof
+if %errorlevel%==2 call :t5-1
+if %errorlevel%==3 call :t5-2
+if %errorlevel%==4 call :t5-3
+goto :eof
+
+:t5-1
+wmic startup get caption,command /value 2>nul | findstr /i /v "Microsoft=Windows=Defender=Intel=AMD=NVIDIA=" | more
+echo [Rxborn] Listed 3rd-party startup – FINISHED
+goto :eof
+
+:t5-2
+sc query WSearch | find "RUNNING" >nul && sc stop WSearch
+sc config WSearch start= disabled
+echo [Rxborn] Windows Search disabled – FINISHED
+goto :eof
+
+:t5-3
+sc query Spooler | find "RUNNING" >nul && sc stop Spooler
+sc config Spooler start= disabled
+echo [Rxborn] Print Spooler disabled – FINISHED
+goto :eof
+
+::::::::::::  CAT 6 – OneDrive  ::::::::::::::
+:cat6
+if not defined rpDone call :makeRP
+cls
+echo ===== 6. OneDrive =====
+echo  1  Remove OneDrive from Run key
+echo  2  Uninstall OneDrive per-user
+echo  0  Back
+choice /c 120 /n /m "Pick: "
+if %errorlevel%==1 goto :eof
+if %errorlevel%==2 call :t6-1
+if %errorlevel%==3 call :t6-2
+goto :eof
+
+:t6-1
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v OneDrive /f >nul 2>&1
+echo [Rxborn] OneDrive startup removed – FINISHED
+goto :eof
+
+:t6-2
+if exist "%SystemRoot%\System32\OneDriveSetup.exe" "%SystemRoot%\System32\OneDriveSetup.exe" /uninstall
+echo [Rxborn] OneDrive per-user uninstall triggered – FINISHED
+goto :eof
+
+::::::::::::  CAT 7 – Telemetry  ::::::::::::::
+:cat7
+if not defined rpDone call :makeRP
+cls
+echo ===== 7. Telemetry & BG Tasks =====
+echo  1  AllowTelemetry=0
+echo  2  Disable DiagTrack service
+echo  3  Disable root cert auto-update
+echo  0  Back
+choice /c 1230 /n /m "Pick: "
+if %errorlevel%==1 goto :eof
+if %errorlevel%==2 call :t7-1
+if %errorlevel%==3 call :t7-2
+if %errorlevel%==4 call :t7-3
+goto :eof
+
+:t7-1
+reg add "HKLM\SOFTWARE\Policies\Microsoft\Windows\DataCollection" /v AllowTelemetry /t REG_DWORD /d 0 /f >nul
+echo [Rxborn] Telemetry policy = 0 – FINISHED
+goto :eof
+
+:t7-2
+sc query DiagTrack | find "RUNNING" >nul && sc stop DiagTrack
+sc config DiagTrack start= disabled
+echo [Rxborn] DiagTrack disabled – FINISHED
+goto :eof
+
+:t7-3
+reg add "HKLM\SOFTWARE\Policies\Microsoft\SystemCertificates\AuthRoot" /v DisableRootAutoUpdate /t REG_DWORD /d 1 /f >nul
+echo [Rxborn] Root cert auto-update disabled – FINISHED
+goto :eof
+
+::::::::::::  CAT 8 – Network  ::::::::::::::
+:cat8
+if not defined rpDone call :makeRP
+cls
+echo ===== 8. Network & SMB =====
+echo  1  SMB bandwidth throttling OFF
+echo  2  Disable QoS RSVP
+echo  0  Back
+choice /c 120 /n /m "Pick: "
+if %errorlevel%==1 goto :eof
+if %errorlevel%==2 call :t8-1
+if %errorlevel%==3 call :t8-2
+goto :eof
+
+:t8-1
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters" /v SMBBandwidthThrottling /t REG_DWORD /d 0 /f >nul
+echo [Rxborn] SMB bandwidth throttling OFF – FINISHED
+goto :eof
+
+:t8-2
+sc query RSVP | find "RUNNING" >nul && sc stop RSVP
+sc config RSVP start= disabled
+echo [Rxborn] QoS RSVP disabled – FINISHED
+goto :eof
+
+::::::::::::  CAT 9 – NTFS  ::::::::::::::
+:cat9
+if not defined rpDone call :makeRP
+cls
+echo ===== 9. NTFS & File-System =====
+echo  1  Disable last-access timestamp
+echo  2  Increase NTFS memory usage
+echo  0  Back
+choice /c 120 /n /m "Pick: "
+if %errorlevel%==1 goto :eof
+if %errorlevel%==2 call :t9-1
+if %errorlevel%==3 call :t9-2
+goto :eof
+
+:t9-1
+fsutil behavior set DisableLastAccess 1
+echo [Rxborn] NTFS last-access disabled – FINISHED
+goto :eof
+
+:t9-2
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\FileSystem" /v NtfsMemoryUsage /t REG_DWORD /d 2 /f >nul
+echo [Rxborn] NTFS memory cache increased – FINISHED
+goto :eof
+
+::::::::::::  CAT 10 – INPUT (KBM & CONTROLLER)  ::::::::::::::
+:cat10
+if not defined rpDone call :makeRP
+cls
+echo ===== 10. Input Tweaks (KBM & Controller) =====
+echo  1  Keyboard fastest repeat / scan
+echo  2  Mouse acceleration OFF
+echo  3  USB polling hints (1000 Hz)
+echo  4  Controller / HID power-save OFF
+echo  5  GameInput & Game-Bar OFF
+echo  6  HID service optimise
+echo  7  Debounce time hint (vendor)
+echo  8  Raw Input flags (apps)
+echo  0  Back
+choice /c 123456780 /n /m "Pick: "
+if %errorlevel%==1 goto :eof
+if %errorlevel%==2 call :t10-1
+if %errorlevel%==3 call :t10-2
+if %errorlevel%==4 call :t10-3
+if %errorlevel%==5 call :t10-4
+if %errorlevel%==6 call :t10-5
+if %errorlevel%==7 call :t10-6
+if %errorlevel%==8 call :t10-7
+if %errorlevel%==9 call :t10-8
+goto :eof
+
+:: 10-1  Keyboard – fastest repeat / scan
+:t10-1
+reg add "HKCU\Control Panel\Keyboard" /v KeyboardDelay /t REG_SZ /d 0 /f >nul
+reg add "HKCU\Control Panel\Keyboard" /v KeyboardSpeed /t REG_SZ /d 31 /f >nul
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\kbdclass\Parameters" /v KeyboardDataQueueSize /t REG_DWORD /d 64 /f >nul 2>&1
+echo [Rxborn] Keyboard repeat optimised – FINISHED
+goto :eof
+
+:: 10-2  Mouse – disable acceleration & smoothing
+:t10-2
+reg add "HKCU\Control Panel\Mouse" /v MouseSpeed /t REG_SZ /d 0 /f >nul
+reg add "HKCU\Control Panel\Mouse" /v MouseThreshold1 /t REG_SZ /d 0 /f >nul
+reg add "HKCU\Control Panel\Mouse" /v MouseThreshold2 /t REG_SZ /d 0 /f >nul
+reg add "HKCU\Control Panel\Mouse" /v SmoothMouseXCurve /t REG_BINARY /d 0000000000000000000000000000000000000000000000000000000000000000 /f >nul 2>&1
+reg add "HKCU\Control Panel\Mouse" /v SmoothMouseYCurve /t REG_BINARY /d 0000000000000000000000000000000000000000000000000000000000000000 /f >nul 2>&1
+echo [Rxborn] Mouse acceleration OFF – FINISHED
+goto :eof
+
+:: 10-3  USB polling hints (1000 Hz friendly)
+:t10-3
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Class\{36FC9E60-C465-11CF-8056-444553540000}" /v IdleEnable /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\HIDCLASS\Parameters" /v HidDataQueueSize /t REG_DWORD /d 64 /f >nul 2>&1
+echo [Rxborn] USB polling hints applied – FINISHED
+goto :eof
+
+:: 10-4  Controller / HID – disable power saving
+:t10-4
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\HIDCLASS\Parameters" /v IdleEnable /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\mouhid\Parameters" /v IdleEnable /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\kbdhid\Parameters" /v IdleEnable /t REG_DWORD /d 0 /f >nul 2>&1
+echo [Rxborn] Controller/HID power-save OFF – FINISHED
+goto :eof
+
+:: 10-5  GameInput & Game-Bar OFF
+:t10-5
+sc query GameInputService >nul 2>&1 && (
+  sc stop GameInputService >nul 2>&1
+  sc config GameInputService start= disabled
+)
+reg add "HKCU\Software\Microsoft\GameBar" /v AllowAutoGameMode /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKCU\Software\Microsoft\GameBar" /v AutoGameModeEnabled /t REG_DWORD /d 0 /f >nul 2>&1
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR" /v AppCaptureEnabled /t REG_DWORD /d 0 /f >nul 2>&1
+echo [Rxborn] GameInput & Game-Bar capture OFF – FINISHED
+goto :eof
+
+:: 10-6  HID service optimise
+:t10-6
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\mouhid\Parameters" /v HidDataQueueSize /t REG_DWORD /d 64 /f >nul 2>&1
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\kbdhid\Parameters" /v HidDataQueueSize /t REG_DWORD /d 64 /f >nul 2>&1
+echo [Rxborn] HID queue size raised – FINISHED
+goto :eof
+
+:: 10-7  Debounce time hint (vendor) – set minimum
+:t10-7
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\kbdclass\Parameters" /v DebounceTime /t REG_DWORD /d 5 /f >nul 2>&1
+reg add "HKLM\SYSTEM\CurrentControlSet\Services\mouclass\Parameters" /v DebounceTime /t REG_DWORD /d 5 /f >nul 2>&1
+echo [Rxborn] Debounce hint = 5 ms – FINISHED
+goto :eof
+
+:: 10-8  Raw Input flags (apps) – enable at OS level
+:t10-8
+reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RawInput" /v EnableRawInput /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\RawInput" /v EnableRawInput /t REG_DWORD /d 1 /f >nul 2>&1
+echo [Rxborn] Raw Input enabled – FINISHED
+goto :eof
+
+::::::::::::  UNDO / REVERT  ::::::::::::::
+:revert
+if not defined rpDone call :makeRP
+cls
+echo ==================  REVERT  ==================
+echo  1  Re-enable SysMain
+echo  2  Balanced power plan
+echo  3  Default visual effects
+echo  4  Re-enable Search
+echo  5  Re-enable Spooler
+echo  6  Re-enable DiagTrack
+echo  7  Re-enable last-access
+echo  8  Revert KBM & Controller tweaks
+echo  0  Back
+choice /c 123456780 /n /m "Undo: "
+set "un=%errorlevel%"
+if %un%==9 goto menu
+if %un%==1 call :r1
+if %un%==2 call :r2
+if %un%==3 call :r3
+if %un%==4 call :r4
+if %un%==5 call :r5
+if %un%==6 call :r6
+if %un%==7 call :r7
+if %un%==8 call :r8
+pause
+goto revert
+
+:r1
+sc config SysMain start= auto & sc start SysMain
+echo [Rxborn] SysMain restored – FINISHED
+goto :eof
+
+:r2
+powercfg /setactive 381b4222-f694-41f0-9685-ff5bb260df2e
+echo [Rxborn] Balanced plan restored – FINISHED
+goto :eof
+
+:r3
+reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" /v VisualFXSetting /t REG_DWORD /d 1 /f >nul
+echo [Rxborn] Visual effects restored – FINISHED
+goto :eof
+
+:r4
+sc config WSearch start= delayed-auto & sc start WSearch >nul 2>&1
+echo [Rxborn] Windows Search restored – FINISHED
+goto :eof
+
+:r5
+sc config Spooler start= auto & sc start Spooler >nul 2>&1
+echo [Rxborn] Print Spooler restored – FINISHED
+goto :eof
+
+:r6
+sc config DiagTrack start= delayed-auto & sc start DiagTrack >nul 2>&1
+echo [Rxborn] DiagTrack restored – FINISHED
+goto :eof
+
+:r7
+fsutil behavior set DisableLastAccess 0
+echo [Rxborn] NTFS last-access restored – FINISHED
+goto :eof
+
+:r8
+:: KBM & Controller full revert
+reg delete "HKCU\Control Panel\Keyboard" /v KeyboardDelay /f >nul 2>&1
+reg delete "HKCU\Control Panel\Keyboard" /v KeyboardSpeed /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\kbdclass\Parameters" /v KeyboardDataQueueSize /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\kbdclass\Parameters" /v DebounceTime /f >nul 2>&1
+reg delete "HKCU\Control Panel\Mouse" /v MouseSpeed /f >nul 2>&1
+reg delete "HKCU\Control Panel\Mouse" /v MouseThreshold1 /f >nul 2>&1
+reg delete "HKCU\Control Panel\Mouse" /v MouseThreshold2 /f >nul 2>&1
+reg delete "HKCU\Control Panel\Mouse" /v SmoothMouseXCurve /f >nul 2>&1
+reg delete "HKCU\Control Panel\Mouse" /v SmoothMouseYCurve /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Control\Class\{36FC9E60-C465-11CF-8056-444553540000}" /v IdleEnable /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\HIDCLASS\Parameters" /v HidDataQueueSize /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\HIDCLASS\Parameters" /v IdleEnable /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\mouhid\Parameters" /v HidDataQueueSize /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\mouhid\Parameters" /v IdleEnable /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\kbdhid\Parameters" /v HidDataQueueSize /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\kbdhid\Parameters" /v IdleEnable /f >nul 2>&1
+reg delete "HKLM\SYSTEM\CurrentControlSet\Services\mouclass\Parameters" /v DebounceTime /f >nul 2>&1
+sc config GameInputService start= demand >nul 2>&1
+reg delete "HKCU\Software\Microsoft\GameBar" /v AllowAutoGameMode /f >nul 2>&1
+reg delete "HKCU\Software\Microsoft\GameBar" /v AutoGameModeEnabled /f >nul 2>&1
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\GameDVR" /v AppCaptureEnabled /f >nul 2>&1
+reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\RawInput" /v EnableRawInput /f >nul 2>&1
+reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\RawInput" /v EnableRawInput /f >nul 2>&1
+echo [Rxborn] KBM & Controller tweaks reverted – FINISHED
+goto :eof
